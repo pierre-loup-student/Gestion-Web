@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organigramme Vue.js</title>
+    <script src="https://unpkg.com/vue@3"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .tree { list-style-type: none; padding-left: 20px; }
+        .v-card { border: 1px solid #ddd; padding: 10px; margin: 5px; border-radius: 5px; background: #f9f9f9; }
+        .toggle-btn { cursor: pointer; color: blue; }
+        .point { width: 10px; height: 10px; background: black; border-radius: 50%; }
+        .rootpoint { width: 10px; height: 10px; background: black; border-radius: 50%; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <h1>Organigramme des Artefacts</h1>
+    <ul class="tree">
+        <li v-for="(node, index) in treeRoot" :key="node.Nom + index" class="v-card">
+
+            <div class="v-card-title" style="text-align: center;font-size: xx-large;" >{{ node.Nom }}</div>
+            <div v-html="renderRootPoint()" style="display: flex; justify-content: center;"></div>
+            <div style="width: 100%; height: 30px;"></div>
+
+            <div v-html="renderTree(node, 0,this.rootpoint)"></div>
+        </li>
+    </ul>
+
+</div>
+
+<script>
+const app = Vue.createApp({
+    methods: {
+    addFleche(pts) {
+        if (pts.length < 2) return;
+
+        const svg = document.getElementById("arrowCanvas") || this.createSvgLayer();
+
+        let pathD = `M ${pts[0].x} ${pts[0].y}`; // Début du chemin
+
+        for (let i = 1; i < pts.length; i++) {
+            const p1 = pts[i - 1];
+            const p2 = pts[i];
+
+            // Ajout d'un arrondi en utilisant une courbe de Bézier quadratique
+            const midX = (p1.x + p2.x) / 2;
+            const midY = (p1.y + p2.y) / 2;
+            pathD += ` Q ${midX} ${p1.y}, ${midX} ${midY} T ${p2.x} ${p2.y}`;
+        }
+
+        // Création de l'élément SVG
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", pathD);
+        path.setAttribute("stroke", "black");
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke-width", "2");
+        path.setAttribute("marker-end", "url(#arrow)");
+
+        svg.appendChild(path);
+    },
+
+    createSvgLayer() {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("id", "arrowCanvas");
+        svg.setAttribute("style", "position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;");
+        document.body.appendChild(svg);
+
+        // Ajouter une flèche au bout des lignes
+        const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+        const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+        marker.setAttribute("id", "arrow");
+        marker.setAttribute("markerWidth", "10");
+        marker.setAttribute("markerHeight", "10");
+        marker.setAttribute("refX", "5");
+        marker.setAttribute("refY", "5");
+        marker.setAttribute("orient", "auto");
+        
+        const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        arrowPath.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+        arrowPath.setAttribute("fill", "black");
+        
+        marker.appendChild(arrowPath);
+        defs.appendChild(marker);
+        svg.appendChild(defs);
+
+        return svg;
+    },
+
+    drawAllArrows() {
+        this.$nextTick(() => {
+            const svg = document.getElementById("arrowCanvas");
+            if (svg) svg.innerHTML = ""; // Efface les anciennes flèches
+
+            this.arrows.forEach(({ from, to }) => {
+                const fromElement = document.getElementById(from);
+                const toElement = document.getElementById(to);
+
+                if (fromElement && toElement) {
+                    const fromRect = fromElement.getBoundingClientRect();
+                    const toRect = toElement.getBoundingClientRect();
+                    const A = { x: fromRect.left + fromRect.width / 2, y: fromRect.top + fromRect.height / 2 };
+                    const B = { x: toRect.left + toRect.width / 2, y: toRect.top + toRect.height / 2 }
+
+                    if (fromElement.classList.contains('rootpoint')) {
+                        const pts = [
+                            { x: A.x, y: A.y },
+                            { x: A.x, y: A.y + 20 },
+                            { x: B.x, y: A.y + 20 },
+                            { x: B.x, y: B.y }
+                        ];
+                        this.addFleche(pts);
+                    } else {
+                        const pts = [
+                            { x: A.x, y: A.y },
+                            { x: A.x + 10, y: A.y },
+                            { x: A.x + 10, y: B.y },
+                            { x: B.x, y: B.y }
+                        ];
+                        this.addFleche(pts);
+                    }
+                }
+            });
+        });
+    },
+
+    renderArrow(){
+        console.log(this.arrows);
+        this.arrows.forEach(fleche => {
+            const from = document.getElementById(fleche.from);
+            const to = document.getElementById(fleche.to);
+            const fromRect = from.getBoundingClientRect();
+            const toRect = to.getBoundingClientRect();
+            const arrow = document.createElement('div');
+            arrow.style.position = 'absolute';
+            arrow.style.width = '2px';
+            arrow.style.background = 'black';
+            arrow.style.borderRadius = '5px';
+
+            if (from.classList.contains('rootpoint')) {
+            arrow.style.height = '20px';
+            arrow.style.left = fromRect.x + fromRect.width / 2 + 'px';
+            arrow.style.top = fromRect.y + fromRect.height + 'px';
+            document.body.appendChild(arrow);
+
+            const horizontalArrow = document.createElement('div');
+            horizontalArrow.style.position = 'absolute';
+            horizontalArrow.style.width = Math.abs(toRect.x - fromRect.x) + 'px';
+            horizontalArrow.style.height = '2px';
+            horizontalArrow.style.background = 'black';
+            horizontalArrow.style.borderRadius = '5px';
+            horizontalArrow.style.left = Math.min(fromRect.x, toRect.x) + 'px';
+            horizontalArrow.style.top = fromRect.y + fromRect.height + 20 + 'px';
+            document.body.appendChild(horizontalArrow);
+
+            const verticalArrow = document.createElement('div');
+            verticalArrow.style.position = 'absolute';
+            verticalArrow.style.width = '2px';
+            verticalArrow.style.height = Math.abs(toRect.y - (fromRect.y + fromRect.height + 20)) + 'px';
+            verticalArrow.style.background = 'black';
+            verticalArrow.style.borderRadius = '5px';
+            verticalArrow.style.left = toRect.x + toRect.width / 2 + 'px';
+            verticalArrow.style.top = Math.min(fromRect.y + fromRect.height + 20, toRect.y) + 'px';
+            document.body.appendChild(verticalArrow);
+            } else {
+            arrow.style.height = '5px';
+            arrow.style.left = fromRect.x + fromRect.width + 'px';
+            arrow.style.top = fromRect.y + fromRect.height / 2 + 'px';
+            document.body.appendChild(arrow);
+
+            const verticalArrow = document.createElement('div');
+            verticalArrow.style.position = 'absolute';
+            verticalArrow.style.width = '2px';
+            verticalArrow.style.height = Math.abs(toRect.y - fromRect.y) + 'px';
+            verticalArrow.style.background = 'black';
+            verticalArrow.style.borderRadius = '5px';
+            verticalArrow.style.left = fromRect.x + fromRect.width + 5 + 'px';
+            verticalArrow.style.top = Math.min(fromRect.y, toRect.y) + 'px';
+            document.body.appendChild(verticalArrow);
+
+            const horizontalArrow = document.createElement('div');
+            horizontalArrow.style.position = 'absolute';
+            horizontalArrow.style.width = Math.abs(toRect.x - (fromRect.x + fromRect.width + 5)) + 'px';
+            horizontalArrow.style.height = '2px';
+            horizontalArrow.style.background = 'black';
+            horizontalArrow.style.borderRadius = '5px';
+            horizontalArrow.style.left = Math.min(fromRect.x + fromRect.width + 5, toRect.x) + 'px';
+            horizontalArrow.style.top = toRect.y + toRect.height / 2 + 'px';
+            document.body.appendChild(horizontalArrow);
+            }
+        });
+    },
+    
+    updateArrowsOnResize() {
+        window.addEventListener('resize', () => {
+            const svg = document.getElementById("arrowCanvas");
+            if (svg) svg.remove(); // Remove the existing SVG layer
+            this.drawAllArrows(); // Redraw all arrows
+        });
+    },
+    renderPoint() {
+        this.pointId++;
+        return `<div class="point" id="point${this.pointId}"></div>`;
+    },
+    renderRootPoint() {
+        this.pointId++;
+        this.rootpoint = this.pointId;
+        return `<div class="rootpoint" id="point${this.pointId}" style="text-align : center;"></div>`;
+    },
+    renderNode(node) {
+        return `
+                <div class="v-card-title" style="display: flex; align-items: center;">
+                    ${this.renderPoint()}
+                    <span style="margin-left: 10px;">${node.Nom}</span>
+                </div>
+                <div>${node.Description}</div>
+        `;
+    },
+    addArrow(from, to) {
+        this.arrows.push({ from, to });
+        return '';
+    },
+    renderTree(node, indent, pointparent) {
+        const createTree = (node, indent, pointparent) => {
+            if (!node.children) return '';
+            const isRoot = indent === 0;
+            const listStyle = isRoot ? 'display: flex; flex-direction: row; align-items: flex-start; gap: 10px;' : '';
+            return `<ul class="tree" style="${listStyle}">${node.children.map(innerChild => `
+            <li class="v-card">
+                ${this.renderNode(innerChild)}
+                ${this.addArrow(`point${pointparent}`, `point${this.pointId}`)}
+                <div>${createTree(innerChild, indent + 1, this.pointId)}</div>
+            </li>
+            `).join('')}</ul>`;
+        };
+        return createTree(node, indent, pointparent);
+    }
+},
+    data() {
+        return { 
+            treeRoot: [], 
+            treeData:[],
+         };
+    },
+    created() {
+        console.log("Fetching data from the server...");
+        axios.get("https://script.google.com/macros/s/AKfycbx3ErWxQ4sQ28EjChIRDaPYga3mUysASOLwYWJocGdBiBwMpGe8DAB7FiWsPIiqPVua/exec")
+            .then(response => {
+                console.log("Data fetched successfully:", response.data);
+                this.treeRoot = response.data.tree || []; // Ensure treeRoot is always an array
+                this.treeData = response.data.map || [];
+                this.arrows = [];
+                this.pointId = 0;
+            })
+            //.then(() => { this.renderArrow(); })
+            .then(() => {this.$nextTick(() => this.drawAllArrows());}) // Dessine les flèches après le rendu
+            .catch(error => console.error("Error loading data:", error));
+        this.updateArrowsOnResize();
+    }
+}
+);
+
+app.mount("#app");
+</script>
+
+</body>
+</html>
